@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<webtop>
+	<section mergeType="merge" id="admin">
+		<subsection sequence="40" mergeType="merge" id="search" label="Search">
+			<menu sequence="10" mergeType="merge" id="azuresearchmenu" label="Azure Search" labelType="value">
+				<menuitem sequence="10" mergeType="merge" id="configAzureSearch_status" label="Azure Search Status" type="configAzureSearch" />
+				<menuitem sequence="20" mergeType="merge" id="configAzureSearch_search" label="Search" type="configAzureSearch" bodyView="webtopBodySearch" />
+				<menuitem sequence="30" mergeType="merge" id="asContentType" label="Type Indexes" type="asContentType" />
+				<menuitem sequence="40" mergeType="merge" id="filemetadata" label="Fix File Metadata" type="asContentType" bodyView="webtopBodyFixMetadata" />
+			</menu>
+		</subsection>
+	</section>
+</webtop>
