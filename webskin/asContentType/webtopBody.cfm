@@ -115,6 +115,16 @@
 		permission="developer",
 		onclick="$fc.objectAdminAction('Upload All Documents', '/webtop/index.cfm?typename=asContentType&view=webtopPageModal&bodyView=webtopBodyUploadAll'); return false;"
 	}) />
+	<cfset arrayappend(stAttributes.aButtons,{
+		type="button",
+		name="fixFileMetadata",
+		value="Fix File Metadata",
+		class="f-submit",
+		buttontype="fixFileMetadata",
+		icon="fa-list",
+		permission="developer",
+		onclick="$fc.objectAdminAction('Fix File Metadata', '/webtop/index.cfm?typename=asContentType&view=webtopPageModal&bodyView=webtopBodyFixMetadata'); return false;"
+	}) />
 	<cfset oTypeAdmin.setAttribute("aButtons",stAttributes.aButtons)>
 
 </ft:objectAdmin>

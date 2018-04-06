@@ -18,10 +18,10 @@
 <cfif stResults["@odata.count"] eq 0>
 	<cfoutput><div class="alert alert-info">No results were found</div></cfoutput>
 <cfelse>
-	<cfif structKeyExists(stResults, "facetQueries")>
+	<cfif not structIsEmpty(stResults, "facet_queries")>
 		<cfoutput><h4>Facets</h4></cfoutput>
-		<cfloop collection="#stResults.facetQueries#" item="property">
-			<cfset qFacets = stResults.facetQueries[property] />
+		<cfloop collection="#stResults.facet_queries#" item="property">
+			<cfset qFacets = stResults.facet_queries[property] />
 
 			<cfoutput>
 				<strong>#property#</strong>
@@ -34,7 +34,7 @@
 		</cfloop>
 	</cfif>
 
-	<skin:pagination currentPage="#url.page#" recordsPerPage="#url.m#" totalRecords="#stResults['@odata.count']#" query="#stResults.items#" bDisplayTotalRecords="true" r_stObject="item">
+	<skin:pagination currentPage="#url.page#" recordsPerPage="#url.m#" totalRecords="#stResults.total_items#" query="#stResults.items#" bDisplayTotalRecords="true" r_stObject="item">
 		<cfif item.currentrow eq 1>
 			<cfoutput>
 				<table class="table table-striped">

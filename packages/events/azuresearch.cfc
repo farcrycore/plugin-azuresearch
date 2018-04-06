@@ -41,7 +41,7 @@
 		<cfargument name="user" type="string" required="true" />
 		<cfargument name="auditNote" type="string" required="true" />
 		
-		<cfset var st = application.fc.lib.azuredsearch.getTypeIndexFields(arguments.typename) />
+		<cfset var st = application.fc.lib.azuresearch.getTypeIndexFields(arguments.typename) />
 
 		<cfif not structIsEmpty(st)>
 			<cfset application.fapi.getContentType("asContentType").importIntoAzureSearch(stObject=arguments.stObject, operation="deleted") />

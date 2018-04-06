@@ -31,7 +31,6 @@
 		<cfargument name="typename" type="string" required="true" hint="The type of the object" />
 		<cfargument name="stObject" type="struct" required="true" hint="The object" />
 
-		<cfset application.fc.lib.azuresearch.resolveIndexFieldDifferences() />
 		<cfset application.fc.lib.azuresearch.updateTypeIndexFieldCache(typename=arguments.typename) />
 
 		<cfset super.onDelete(argumentCollection = arguments) />
@@ -139,7 +138,11 @@
 							<td>
 								<input type="hidden" name="#arguments.fieldname#field#i#" value="#thisobject.fieldName#" />
 								<cfloop query="qFields">
-									<cfif qFields.field eq thisobject.fieldName><span title="#qFields.field#">#qFields.label#<br><small>#application.fapi.getPropertyMetadata(typename=arguments.stObject.contentType, property=qFields.field, md="ftFieldset", default="")#</small></span></cfif>
+									<cfif qFields.field eq thisobject.fieldName>
+										<span title="#qFields.field#">#qFields.label# <small><code>#qFields.field#</code></small><br>
+										<small>#application.fapi.getPropertyMetadata(typename=arguments.stObject.contentType, property=qFields.field, md="ftFieldset", default="")#</small>
+									</span>
+								</cfif>
 								</cfloop>
 							</td>
 							<td>
@@ -305,7 +308,7 @@
 					select 	p.fieldName as property,
 							lower(p.fieldName) + '_' + lower(p.fieldType) as field,
 							p.fieldType as 'type', p.bSort as 'sort', p.bFacet as 'facet',
-							0 as 'return', 1 as 'search', case when p.fieldType in ('Literal','CollectionLiteral') then 'keyword' when p.fieldType in ('String','CollectionString') then 'standard' else '' end as analyzer
+							0 as 'return', 1 as 'search', case when p.fieldType in ('String','CollectionString') then 0 else 1 end as 'filter', case when p.fieldType in ('Literal','CollectionLiteral') then 'keyword' when p.fieldType in ('String','CollectionString') then 'standard' else '' end as analyzer
 					from 	asContentType ct
 							inner join
 							asContentType_aProperties p
@@ -320,7 +323,7 @@
 			<cfdefaultcase>
 				<cfquery datasource="#application.dsn#" name="qResult">
 					select 	p.fieldName as property, concat(lower(p.fieldName),'_',lcase(p.fieldType)) as field, p.fieldType as `type`, p.bSort as `sort`, p.bFacet as `facet`,
-							0 as `return`, 1 as `search`, case when p.fieldType in ('Literal','CollectionLiteral') then 'keyword' when p.fieldType in ('String','CollectionString') then 'standard' else '' end as analyzer
+							0 as `return`, 1 as `search`, case when p.fieldType in ('String','CollectionString') then 0 else 1 end as 'filter', case when p.fieldType in ('Literal','CollectionLiteral') then 'keyword' when p.fieldType in ('String','CollectionString') then 'standard' else '' end as analyzer
 					from 	asContentType ct
 							inner join
 							asContentType_aProperties p
@@ -340,6 +343,7 @@
 			<cfset querySetCell(qResult,"type","Literal") />
 			<cfset querySetCell(qResult,"return",1) />
 			<cfset querySetCell(qResult,"search",1) />
+			<cfset querySetCell(qResult,"filter",1) />
 			<cfset querySetCell(qResult,"facet",0) />
 			<cfset querySetCell(qResult,"sort",0) />
 			<cfset querySetCell(qResult,"analyzer","keyword") />
@@ -350,6 +354,7 @@
 			<cfset querySetCell(qResult,"type","Literal") />
 			<cfset querySetCell(qResult,"return",1) />
 			<cfset querySetCell(qResult,"search",1) />
+			<cfset querySetCell(qResult,"filter",1) />
 			<cfset querySetCell(qResult,"facet",1) />
 			<cfset querySetCell(qResult,"sort",0) />
 			<cfset querySetCell(qResult,"analyzer","keyword") />
@@ -358,8 +363,9 @@
 			<cfset querySetCell(qResult,"property","filecontent") />
 			<cfset querySetCell(qResult,"field","filecontent_string") />
 			<cfset querySetCell(qResult,"type","String") />
-			<cfset querySetCell(qResult,"return",1) />
+			<cfset querySetCell(qResult,"return",0) />
 			<cfset querySetCell(qResult,"search",1) />
+			<cfset querySetCell(qResult,"filter",0) />
 			<cfset querySetCell(qResult,"facet",0) />
 			<cfset querySetCell(qResult,"sort",0) />
 			<cfset querySetCell(qResult,"analyzer","standard") />
@@ -420,12 +426,15 @@
 		<cfset var fileMeta = "" />
 
 		<cfloop collection="#application.stCOAPI[arguments.typename].stProps#" item="property">
-			<cfif application.fapi.getPropertyMetadata(arguments.typename, property, "ftType", "") eq "azureupload">
+			<cfif application.fapi.getPropertyMetadata(arguments.typename, property, "ftType", "") eq "azureupload"
+				or application.fapi.getPropertyMetadata(arguments.typename, property, "ftType", "") eq "file">
 
 				<cfset stMetadata = application.stCOAPI[arguments.typename].stProps[property].metadata />
-				<cfset fileMeta = application.formtools.azureupload.oFactory.resolveLocationMetadata(stMetadata) />
+				<cfset fileMeta = application.fc.lib.azurecdn.resolveLocationMetadata(typename=arguments.typename, stMetadata=stMetadata) />
 
-				<cfset stResult[property] = stMetadata />
+				<cfif not structIsEmpty(fileMeta)>
+					<cfset stResult[property] = stMetadata />
+				</cfif>
 			</cfif>
 		</cfloop>
 
@@ -502,7 +511,7 @@
 			<cfelseif qContent.operation eq "deleted">
 				<cfset arrayAppend(aDocs, {
 					"@search.action" = "delete",
-					"objectid" = qContent.objectid
+					"objectid_literal" = qContent.objectid
 				}) />
 			</cfif>
 
@@ -525,10 +534,10 @@
 
 	<cffunction name="bulkFixMetadata" access="public" output="false" returntype="struct">
 		<cfargument name="typename" type="string" required="true" />
-		<cfargument name="runfrom" type="date" required="true" />
+		<cfargument name="runfrom" type="any" required="true" />
 		<cfargument name="maxRows" type="numeric" required="false" default="-1" />
 
-		<cfset var oContent = application.fapi.getContentType(typename=arguments.typename) />
+		<cfset var oContent = {} />
 		<cfset var stObject = "" />
 		<cfset var stContent = {} />
 		<cfset var aDocs = [] />
@@ -536,29 +545,62 @@
 		<cfset var stResult = {} />
 		<cfset var updatecount = 0 />
 		<cfset var missingcount = 0 />
-		<cfset var stUploadMetadata = getUploadMetadata(arguments.typename) />
+		<cfset var stUploadMetadata = {} />
 		<cfset var qContent = [] />
 		<cfset var stMetadata = {} />
 		<cfset var key = "" />
 		<cfset var fileMeta = {} />
 
+		<!--- The baseline run through - set default metadata on every file in the location --->
+		<cfif arguments.typename eq "baseline">
+			<cfset stFiles = application.fc.lib.azurecdn.getAllFiles(marker=arguments.runfrom, maxrows=arguments.maxrows) />
+
+			<cfloop query="stFiles.files">
+				<cfset stMeta = application.fc.lib.cdn.cdns.azure.ioReadMetadata(config=stFiles.locationConfig, file=stFiles.files.file) />
+				<cfif not structKeyExists(stMeta, "AzureSearch_Skip")>
+					<cfset application.fc.lib.cdn.cdns.azure.ioWriteMetadata(
+						config = stFiles.locationConfig,
+						file = stFiles.files.file,
+						metadata = {
+							"AzureSearch_Skip" = "true"
+						}
+					) />
+				</cfif>
+			</cfloop>
+
+			<cfreturn {
+				"typename" = "baseline",
+				"updatecount" = stFiles.files.recordcount,
+				"missingcount" = 0,
+				"nextMark" = stFiles.nextMarker,
+				"more" = stFiles.files.recordcount eq arguments.maxrows,
+				"range" = "[" & listFirst(runfrom) & "]"
+			} />
+		</cfif>
+
+		<!--- There are no azure file properties marked for indexing --->
+		<cfset oContent = application.fapi.getContentType(typename=arguments.typename) />
+		<cfset stUploadMetadata = getUploadMetadata(arguments.typename) />
 		<cfif structIsEmpty(stUploadMetadata)>
 			<!--- There are no indexable file properties --->
 			<cfreturn {
 				"typename"=arguments.typename,
 				"updatecount"=0,
 				"missingcount"=0,
-				"more"=false
+				"more"=false,
+				"range"=""
 			} />
 		</cfif>
 
+		<!--- Based on DB records, update the metadata on the files for this type --->
+		<cfset arguments.runfrom = application.fc.lib.cdn.cdns.azure.rfc3339ToDate(arguments.runfrom) />
 		<cfset qContent = getRecordsToUpdate(typename=arguments.typename, builtToDate=arguments.runfrom, maxRows=arguments.maxRows, extraProperties=structKeyList(stUploadMetadata)) />
 
 		<cfloop query="qContent">
 			<cfloop collection="#stUploadMetadata#" item="key">
 				<cfif len(qContent[key][qContent.currentrow])>
 					<cftry>
-						<cfset application.formtools.azureupload.oFactory.updateTags(stObject=oContent.getData(qContent.objectid), stMetadata=stUploadMetadata[key]) />
+						<cfset application.fc.lib.azurecdn.updateTags(typename=arguments.typename, stObject=oContent.getData(qContent.objectid), stMetadata=stUploadMetadata[key]) />
 						<cfset updatecount += 1 />
 
 						<cfcatch>
@@ -575,13 +617,14 @@
 			<cfset builtToDate = qContent.datetimeLastUpdated />
 		</cfloop>
 
-		<cfset stResult["typename"] = arguments.typename />
-		<cfset stResult["updatecount"] = updatecount />
-		<cfset stResult["missingcount"] = missingcount />
-		<cfset stResult["builtToDate"] = builtToDate />
-		<cfset stResult["more"] = qContent.recordcount eq arguments.maxrows />
-
-		<cfreturn stResult />
+		<cfreturn {
+			"typename" = arguments.typename,
+			"updatecount" = updatecount,
+			"missingcount" = missingcount,
+			"nextMark" = qContent.recordcount ? application.fc.lib.cdn.cdns.azure.dateToRFC3339(builtToDate) : "",
+			"more" = qContent.recordcount eq arguments.maxrows,
+			"range" = "[" & application.fc.lib.cdn.cdns.azure.dateToRFC3339(arguments.runfrom) & " - " & (qContent.recordcount ? application.fc.lib.cdn.cdns.azure.dateToRFC3339(builtToDate) : "now") & "]"
+		} />
 	</cffunction>
 
 	<cffunction name="importIntoAzureSearch" access="public" output="false" returntype="struct">

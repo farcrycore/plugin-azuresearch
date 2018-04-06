@@ -5,11 +5,11 @@
 <cfif structKeyExists(url, "run")>
 	<cfset count = 0 />
 
-	<cfset qTypes = application.fapi.getContentObjects(typename="csContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
+	<cfset qTypes = application.fapi.getContentObjects(typename="asContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
 
 	<cftry>
 		<cfloop query="qTypes">
-			<cfset stResult = bulkImportIntoCloudSearch(objectid=qTypes.objectid, maxRows=100) />
+			<cfset stResult = bulkImportIntoAzureSearch(objectid=qTypes.objectid, maxRows=25) />
 
 			<cfif stResult.count>
 				<cfset application.fapi.stream(type="json", content={

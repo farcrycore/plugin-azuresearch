@@ -7,9 +7,8 @@
 <ft:processform action="Apply Updates" url="refresh">
 	<cfset stIndex = application.fc.lib.azuresearch.getIndex() />
 	<cfset qDiffIndexFields = application.fc.lib.azuresearch.diffIndexFields() />
-	<cfif find(",update", valueList(qDiffIndexFields.action))>
+	<cfif reFindNoCase("(^|,)(update|delete)", valueList(qDiffIndexFields.action))>
 		<cfset application.fc.lib.azuresearch.deleteIndex() />
-		<cfset application.fc.lib.azuresearch.createIndex() />
 		<cfset application.fc.lib.azuresearch.createIndex() />
 	<cfelseif arrayLen(stIndex.fields)>
 		<cfset application.fc.lib.azuresearch.updateIndex() />
@@ -22,7 +21,7 @@
 <cfif structKeyExists(url, "runIndexer")>
 	<cfset application.fc.lib.azuresearch.runIndexer(name=url.runIndexer) />
 	<skin:bubble tags="success" message="Indexer #url.runIndexer# is running now" />
-	<skin:location url="#application.fapi.fixURL(removeValues='runIndexer', addValues='getIndexerStatus=#url.runIndexer#')###indexers" />
+	<skin:location url="#application.fapi.fixURL(removeValues='runIndexer', addValues='getIndexerStatus=#url.runIndexer#')#" />
 </cfif>
 
 <cfif structKeyExists(url, "deleteIndexer")>
@@ -30,7 +29,7 @@
 	<cfset application.fc.lib.azuresearch.deleteIndexer(name=url.deleteIndexer) />
 	<cfset application.fc.lib.azuresearch.deleteDatasource(name=qIndexer.dataSourceName) />
 	<skin:bubble tags="success" message="Indexer #url.deleteIndexer# is deleted" />
-	<skin:location url="#application.fapi.fixURL(removeValues='deleteIndexer')###indexers" />
+	<skin:location url="#application.fapi.fixURL(removeValues='deleteIndexer')#" />
 </cfif>
 
 <cfif structKeyExists(url, "createIndexer")>
@@ -39,21 +38,21 @@
 	<cfif qDatasource.recordcount neq 0>
 		<cfset application.fc.lib.azuresearch.deleteDatasource(name=qIndexer.dataSourceName) />
 	</cfif>
-	<cfset application.fc.lib.azuresearch.createDatasource(name=qIndexer.dataSourceName, location=qIndexer.name) />
+	<cfset application.fc.lib.azuresearch.createDatasource(name=qIndexer.dataSourceName, location=qIndexer.location) />
 	<cfset application.fc.lib.azuresearch.createIndexer(name=url.createIndexer, description=qIndexer.description, dataSourceName=qIndexer.dataSourceName) />
 	<skin:bubble tags="success" message="Indexer #url.createIndexer# is created" />
-	<skin:location url="#application.fapi.fixURL(removeValues='createIndexer')###indexers" />
+	<skin:location url="#application.fapi.fixURL(removeValues='createIndexer')#" />
 </cfif>
 
 <cfif structKeyExists(url, "updateIndexer")>
 	<cfset qIndexer = application.fc.lib.azuresearch.getExpectedIndexers(name=url.updateIndexer) />
 	<cfset qDatasource = application.fc.lib.azuresearch.getDatasources(name=qIndexer.dataSourceName) />
 	<cfif qDatasource.recordcount eq 0>
-		<cfset application.fc.lib.azuresearch.createDatasource(name=qIndexer.dataSourceName, location=qIndexer.name) />
+		<cfset application.fc.lib.azuresearch.createDatasource(name=qIndexer.dataSourceName, location=qIndexer.location) />
 	</cfif>
 	<cfset application.fc.lib.azuresearch.updateIndexer(name=url.updateIndexer, description=qIndexer.description, dataSourceName=qIndexer.dataSourceName) />
 	<skin:bubble tags="success" message="Indexer #url.updateIndexer# is updated" />
-	<skin:location url="#application.fapi.fixURL(removeValues='updateIndexer')###indexers" />
+	<skin:location url="#application.fapi.fixURL(removeValues='updateIndexer')#" />
 </cfif>
 
 
@@ -122,6 +121,8 @@
 			<thead>
 				<tr>
 					<th>Name</th>
+					<th>Location</th>
+					<th>Container</th>
 					<th>Description</th>
 					<th>Datasource</th>
 					<th></th>
@@ -134,30 +135,25 @@
 
 				<cfloop query="qIndexers">
 					<tr>
-						<td>
-							<cfif structKeyExists(url, "getIndexerStatus") and url.getIndexerStatus eq qIndexers.name>
-								<strong>#qIndexers.name#</strong>
-								#stStatus.status#
-							<cfelse>
-								#qIndexers.name#
-							</cfif>
-						</td>
+						<td>#qIndexers.indexer#</td>
+						<td>#qIndexers.location#</td>
+						<td>#qIndexers.container#</td>
 						<td>#qIndexers.description#</td>
 						<td>#qIndexers.dataSourceName#</td>
 						<td>
-							<a href="#application.fapi.fixURL(addvalues='runIndexer=#qIndexers.name#')#" title="Run indexer"><i class="fa fa-play"></i></a>
+							<a href="#application.fapi.fixURL(addvalues='runIndexer=#qIndexers.indexer#')#" title="Run indexer"><i class="fa fa-play"></i></a>
 							&nbsp;
-							<a href="#application.fapi.fixURL(addvalues='getIndexerStatus=#qIndexers.name#')###indexers" title="Get status"><i class="fa fa-tachometer"></i></a>
+							<a href="#application.fapi.fixURL(addvalues='getIndexerStatus=#qIndexers.indexer#')#" title="Get status"><i class="fa fa-tachometer"></i></a>
 							&nbsp;
 							<cfif qIndexers.action eq "delete">
-								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='deleteIndexer=#qIndexers.name#')#" title="Unknown indexer"><i class="fa fa-times"></i></a>
+								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='deleteIndexer=#qIndexers.indexer#')#" title="Unknown indexer" onClick="return window.confirm('Are you sure you want to remove this indexer?');"><i class="fa fa-times"></i></a>
 							<cfelseif qIndexers.action eq "add">
-								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='createIndexer=#qIndexers.name#')#" title="Undeployed indexer"><i class="fa fa-plus"></i></a>
+								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='createIndexer=#qIndexers.indexer#')#" title="Undeployed indexer"><i class="fa fa-plus"></i></a>
 							<cfelseif len(qIndexers.action)>
-								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='updateIndexer=#qIndexers.name#')#" title="Update indexer: #listRest(qIndexers.action, ':')#"><i class="fa fa-pencil"></i></a>
-								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='deleteIndexer=#qIndexers.name#')#" title="Remove indexer"><i class="fa fa-times"></i></a>
+								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='updateIndexer=#qIndexers.indexer#')#" title="Update indexer: #listRest(qIndexers.action, ':')#"><i class="fa fa-pencil"></i></a>
+								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='deleteIndexer=#qIndexers.indexer#')#" title="Remove indexer"><i class="fa fa-times"></i></a>
 							<cfelse>
-								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='deleteIndexer=#qIndexers.name#')#" title="Remove indexer"><i class="fa fa-times"></i></a>
+								<a href="#application.fapi.fixURL(removeValues='getIndexerStatus', addvalues='deleteIndexer=#qIndexers.indexer#')#" title="Remove indexer"><i class="fa fa-times"></i></a>
 							</cfif>
 						</td>
 					</tr>
@@ -168,7 +164,7 @@
 		<cfif structKeyExists(url, "getIndexerStatus")>
 			<div class="row">
 				<div class="span11 offset1">
-					<h3>Indexer Status: #stStatus.name#</h3>
+					<h3>#stStatus.name# (status: #stStatus.status#)</h3>
 					<table class="table table-striped">
 						<thead>
 							<tr>
@@ -206,7 +202,8 @@
 					<th>Field</th>
 					<th>Type <a target="_blank" href="http://docs.aws.amazon.com/azuresearch/latest/developerguide/configuring-index-fields.html"><i class="fa fa-question-o"></i></a></th>
 					<th>Return</th>
-					<th>Search</th>
+					<th>Searchable</th>
+					<th>Filterable</th>
 					<th>Facet</th>
 					<th>Sort</th>
 					<th>Analysis Scheme</th>
@@ -223,6 +220,7 @@
 						<td>#qIndexFields.type#</td>
 						<td>#yesNoFormat(qIndexFields.return)#</td>
 						<td>#yesNoFormat(qIndexFields.search)#</td>
+						<td>#yesNoFormat(qIndexFields.filter)#</td>
 						<td>#yesNoFormat(qIndexFields.facet)#</td>
 						<td>#yesNoFormat(qIndexFields.sort)#</td>
 						<td>#qIndexFields.analyzer#</td>
@@ -234,7 +232,7 @@
 		<cfif qDiffIndexFields.recordcount>
 			<h2>Update Required</h2>
 
-			<cfif find(",update", valueList(qDiffIndexFields.action))>
+			<cfif reFindNoCase("(^|,)(update|delete)", valueList(qDiffIndexFields.action))>
 				<ft:form><ft:button class="btn btn-primary" value="Apply Updates" confirmText="This will require deleting and recreating the index, and you will have to reupload documents. Do you want to continue?" /></ft:form>
 			<cfelse>
 				<ft:form><ft:button class="btn btn-primary" value="Apply Updates" /></ft:form>

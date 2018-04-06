@@ -5,14 +5,16 @@
 <cfset lFacet = "" />
 
 <cfloop array="#stObj.aProperties#" index="stProp">
-	<cfif stProp.bIndex>
-		<cfset lIndex = listAppend(lIndex,stProp.fieldname) />
-	</cfif>
-	<cfif stProp.bSort>
-		<cfset lSort = listAppend(lSort,stProp.fieldname) />
-	</cfif>
-	<cfif stProp.bFacet>
-		<cfset lFacet = listAppend(lFacet,stProp.fieldname) />
+	<cfif isStruct(stProp)>
+		<cfif stProp.bIndex>
+			<cfset lIndex = listAppend(lIndex,stProp.fieldname) />
+		</cfif>
+		<cfif stProp.bSort>
+			<cfset lSort = listAppend(lSort,stProp.fieldname) />
+		</cfif>
+		<cfif stProp.bFacet>
+			<cfset lFacet = listAppend(lFacet,stProp.fieldname) />
+		</cfif>
 	</cfif>
 </cfloop>
 

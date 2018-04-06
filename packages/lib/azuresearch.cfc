@@ -24,6 +24,10 @@ component {
 		//	stArgs["objectid_in"] = arguments.lObjectIds;
 		//}
 
+		if (not isEnabled()) {
+			return queryNew("dummy");
+		}
+
 		return application.fapi.getContentObjects(argumentCollection=stArgs);
 	}
 
@@ -74,11 +78,15 @@ component {
 	}
 
 	public string function getDefaultFieldType(required struct stMeta){
-		switch (stMeta.type){
+		if (arguments.stMeta.name eq "status") {
+			return "Literal";
+		}
+
+		switch (arguments.stMeta.type){
 			case "string":
-				switch (stMeta.ftType){
+				switch (arguments.stMeta.ftType){
 					case "list":
-						if (stMeta.ftSelectMultiple)
+						if (arguments.stMeta.ftSelectMultiple)
 							return "Literal";
 						else
 							return "Literal";
@@ -338,8 +346,8 @@ component {
 		for (item in stResult.executionHistory) {
 			queryAddRow(qRuns);
 			querySetCell(qRuns, "status", item.status);
-			if (structKeyExists(item, "errorMessage")) {
-				querySetCell(qRuns, "errorMessage", item.errorMessage);
+			if (structKeyExists(item, "errors") and arrayLen(item.errors)) {
+				querySetCell(qRuns, "errorMessage", item.errors[1].errorMessage);
 			}
 			querySetCell(qRuns, "startTime", RFC3339ToDate(item.startTime));
 			querySetCell(qRuns, "endTime", RFC3339ToDate(item.endTime));
@@ -349,7 +357,8 @@ component {
 		return {
 			"name" = stResult.name,
 			"status" = stResult.status,
-			"runs" = qRuns
+			"runs" = qRuns,
+			"raw" = stResult
 		};
 	}
 
@@ -359,13 +368,17 @@ component {
 		string name=""
 	) ref="https://docs.microsoft.com/en-us/rest/api/searchservice/list-indexers" {
 		var data = makeRequest(serviceName=arguments.serviceName, resource="/indexers");
-		var qResult = queryNew("name,description,dataSourceName,targetIndexName","varchar,varchar,varchar,varchar");
+		var qResult = queryNew("indexer,location,container,description,dataSourceName,targetIndexName","varchar,varchar,varchar,varchar,varchar,varchar");
 		var item = {};
+		var ds = {};
 
 		for (item in data.value) {
 			if ((arguments.targetIndexName eq "" or arguments.targetIndexName eq item.targetIndexName) and (arguments.name eq "" or arguments.name eq item.name)) {
+				ds = getDatasources(serviceName=arguments.serviceName, name=item.dataSourceName);
 				queryAddRow(qResult);
-				querySetCell(qResult, "name", item.name);
+				querySetCell(qResult, "indexer", item.name);
+				querySetCell(qResult, "location", application.fc.lib.azurecdn.getLocationByContainer(ds.container[1]));
+				querySetCell(qResult, "container", ds.container[1]);
 				querySetCell(qResult, "description", item.description);
 				querySetCell(qResult, "dataSourceName", item.dataSourceName);
 				querySetCell(qResult, "targetIndexName", item.targetIndexName);
@@ -379,7 +392,10 @@ component {
 		var qLocations = application.fc.lib.cdn.getLocations();
 		var i = 0;
 		var location = {};
+		var indexerName = "";
 
+		queryAddColumn(qLocations, "indexer");
+		queryAddColumn(qLocations, "location");
 		queryAddColumn(qLocations, "container");
 		queryAddColumn(qLocations, "description");
 		queryAddColumn(qLocations, "dataSourceName");
@@ -388,7 +404,11 @@ component {
 		for (i=qLocations.recordcount; i>=1; i--) {
 			if (qLocations.type[i] eq "azure") {
 				location = application.fc.lib.cdn.getLocation(qLocations.name[i]);
-				if (structKeyExists(location, "indexable") and location.indexable and (arguments.name eq "" or arguments.name eq location.name)) {
+				indexerName = location.container & "-" & application.fapi.getConfig("azuresearch", "index");
+
+				if (structKeyExists(location, "indexable") and location.indexable and (arguments.name eq "" or arguments.name eq indexerName)) {
+					querySetCell(qLocations, "indexer", indexerName, i);
+					querySetCell(qLocations, "location", location.name, i);
 					querySetCell(qLocations, "container", location.container, i);
 					querySetCell(qLocations, "description", location.container & " indexer", i);
 					querySetCell(qLocations, "dataSourceName", location.container, i);
@@ -403,6 +423,7 @@ component {
 			}
 		}
 
+		queryDeleteColumn(qLocations, "name");
 		queryDeleteColumn(qLocations, "type");
 
 		return qLocations;
@@ -427,20 +448,21 @@ component {
 		}
 
 		for (row in arguments.expectedIndexers) {
-			stExpected[row.name] = row;
+			stExpected[row.indexer] = row;
 		}
 
-		queryAddColumn(arguments.existingIndexers, "container");
 		queryAddColumn(arguments.existingIndexers, "action");
 		for (i=1; i<=arguments.existingIndexers.recordcount; i++) {
-			if (not structKeyExists(stExpected, arguments.existingIndexers.name[i])) {
+			if (not structKeyExists(stExpected, arguments.existingIndexers.indexer[i])) {
 				querySetCell(arguments.existingIndexers, "action", "delete");
 				continue;
 			}
 
-			row = stExpected[arguments.existingIndexers.name[i]];
-			querySetCell(arguments.existingIndexers, "container", arguments.existingIndexers.name[i], i);
-			querySetCell(arguments.existingIndexers, "name", row.name, i);
+			row = stExpected[arguments.existingIndexers.indexer[i]];
+			querySetCell(arguments.existingIndexers, "indexer", row.indexer, i);
+			if (arguments.existingIndexers.container[i] neq row.container) {
+				changes = listAppend(changes, "container(" & arguments.existingIndexers.container[i] & "=>" & row.container & ")");
+			}
 			if (arguments.existingIndexers.description[i] neq row.description) {
 				changes = listAppend(changes, "description(" & arguments.existingIndexers.description[i] & "=>" & row.description & ")");
 			}
@@ -451,15 +473,16 @@ component {
 				changes = listAppend(changes, "targetIndexName(" & arguments.existingIndexers.targetIndexName[i] & "=>" & row.targetIndexName & ")");
 			}
 			if (len(changes)) {
-				querySetCell(arguments.existingIndexers, "action", "update:" & changes);
+				querySetCell(arguments.existingIndexers, "action", "update:" & changes, ", ");
 			}
 
-			structDelete(stExpected, row.name);
+			structDelete(stExpected, row.indexer);
 		}
 
 		for (i in stExpected) {
 			queryAddRow(arguments.existingIndexers);
-			querySetCell(arguments.existingIndexers, "name", stExpected[i].name);
+			querySetCell(arguments.existingIndexers, "indexer", stExpected[i].indexer);
+			querySetCell(arguments.existingIndexers, "location", stExpected[i].location);
 			querySetCell(arguments.existingIndexers, "container", stExpected[i].container);
 			querySetCell(arguments.existingIndexers, "description", stExpected[i].description);
 			querySetCell(arguments.existingIndexers, "dataSourceName", stExpected[i].dataSourceName);
@@ -509,7 +532,7 @@ component {
 		string name=application.fapi.getConfig("azuresearch", "index")
 	) {
 		var data = getIndex(argumentCollection=arguments);
-		var qResult = querynew("field,type,return,search,facet,sort,analyzer","varchar,varchar,bit,bit,bit,bit,varchar");
+		var qResult = querynew("field,type,return,search,filter,facet,sort,analyzer","varchar,varchar,bit,bit,bit,bit,bit,varchar");
 		var field = {};
 
 		for (field in data.fields){
@@ -533,42 +556,35 @@ component {
 					"sortable" = row.sort eq 1,
 					"facetable" = row.facet eq 1,
 					"retrievable" = row["return"] eq 1,
+					"filterable" = row.filter eq 1,
 					"key" = row.field eq "objectid_literal"
 				};
 
 				switch (row.type) {
 					case "Boolean":
 						field["type"] = "Edm.Boolean";
-						field["filterable"] = true;
 						break;
 					case "DateTimeOffset":
 						field["type"] = "Edm.DateTimeOffset";
-						field["filterable"] = true;
 						break;
 					case "Double":
 						field["type"] = "Edm.Double";
-						field["filterable"] = true;
 						break;
 					case "GeographyPoint":
 						field["type"] = "Edm.GeographyPoint";
-						field["filterable"] = true;
 						break;
 					case "Int32":
 						field["type"] = "Edm.Int32";
-						field["filterable"] = true;
 						break;
 					case "Int64":
 						field["type"] = "Edm.Int64";
-						field["filterable"] = true;
 						break;
 					case "Literal":
 						field["type"] = "Edm.String";
-						field["filterable"] = true;
 						field["analyzer"] = "keyword";
 						break;
 					case "CollectionLiteral":
 						field["type"] = "Collection(Edm.String)";
-						field["filterable"] = true;
 						field["analyzer"] = "keyword";
 						break;
 					case "String":
@@ -611,22 +627,31 @@ component {
 		string name=application.fapi.getConfig("azuresearch", "index")
 	) ref="https://docs.microsoft.com/en-us/rest/api/searchservice/update-index" {
 		var qFields = application.fapi.getContentType("asContentType").getIndexFields();
+		var stIndex = getIndex(argumentCollection=arguments);
 		var data = {
 			"name" = arguments.name,
 			"fields" = localToAzureFields(qFields),
 			"suggesters": [],
 			"scoringProfiles": []
 		};
+		var stField = {};
+		var addedFields = valueList(qFields.field);
+
+		for (stField in stIndex.fields) {
+			if (not listFindNoCase(addedFields, stField.name)) {
+				arrayAppend(data.fields, stField);
+			}
+		}
 
 		makeRequest(serviceName=arguments.serviceName, method="PUT", resource="/indexes/#arguments.name#", stData=data);
 	}
 
-	public struct function deleteIndex(
+	public void function deleteIndex(
 		string serviceName=application.fapi.getConfig("azuresearch","serviceName",""),
 		string name=application.fapi.getConfig("azuresearch", "index")
 	) ref="https://docs.microsoft.com/en-us/rest/api/searchservice/delete-index" {
 
-		return makeRequest(serviceName=arguments.serviceName, method="DELETE", resource="/indexes/#arguments.name#");
+		makeRequest(serviceName=arguments.serviceName, method="DELETE", resource="/indexes/#arguments.name#");
 	}
 
 	public struct function uploadDocuments(
@@ -664,10 +689,13 @@ component {
 		array conditions,
 		array filters,
 		struct facets={},
+		string highlight="",
 		numeric maxrows=10,
 		numeric page=1,
 		string sort="search.score() desc"
 	) ref="https://docs.microsoft.com/en-us/rest/api/searchservice/search-documents" {
+		var stIndexFields ={};
+
 		// collect index field information
 		if (structKeyExists(arguments,"typename") and len(arguments.typename)){
 			// filter by content type
@@ -692,24 +720,11 @@ component {
 
 			if (structKeyExists(arguments,"typename") and len(arguments.typename)){
 				// filter by content type
-				if (listlen(arguments.typename)){
-					arrayPrepend(arguments.filters, { "or"=[] });
-
-					for (key in listtoarray(arguments.typename)){
-						arrayAppend(arguments.filters[1]["or"],{ "property"="typename", "term"=key });
-					}
-				}
-				else {
-					arrayPrepend(arguments.filters, { "property"="typename", "term"=arguments.typename });
-				}
+				arrayAppend(arguments.filters, { "property"="typename", in=arguments.typename });
 			}
 
 			if (arraylen(arguments.filters)){
-				arguments.rawFilter = getSearchQueryFromArray(stIndexFields=stIndexFields, conditions=arguments.filters, bBoost=false).query;
-
-				if (arraylen(arguments.filters) gt 1){
-					arguments.rawFilter = "(and " & chr(10) & arguments.rawFilter & chr(10) & ")";
-				}
+				arguments.rawFilter = getSearchQueryFromArray(stIndexFields=stIndexFields, conditions=arguments.filters, bBoost=false);
 			}
 			else {
 				arguments.rawFilter = "";
@@ -737,7 +752,8 @@ component {
 			"skip"=arguments.maxrows * (arguments.page - 1),
 			"top"=arguments.maxrows,
 			"select"="objectid_literal,typename_literal",
-			"count"=true
+			"count"=true,
+			"orderby"=arguments.sort
 		}
 		if (structKeyExists(arguments, "rawFacets") and len(arguments.rawFacets)) {
 			stQuery["facets"] = listToArray(arguments.rawFacets, ";");
@@ -745,20 +761,24 @@ component {
 		if (structKeyExists(arguments, "rawFilter") and len(arguments.rawFilter)) {
 			stQuery["filter"] = arguments.rawFilter;
 		}
+		if (len(arguments.highlight)) {
+			stQuery["highlight"] = arguments.highlight;
+		}
 
 		var result = makeRequest(
+			method="POST",
 			serviceName=arguments.serviceName,
 			resource="/indexes/#arguments.index#/docs/search",
 			stData=stQuery
 		);
 
-		result["items"] = convertResultsToQuery(result.value);
-		if (structKeyExists(result, "@search.facets")) {
-			result["facetQueries"] = convertFacetsToQueries(result["@search.facets"]);
-		}
-		result["query"] = stQuery;
-
-		return result;
+		return {
+			"raw_query" = stQuery,
+			"raw_result" = result,
+			"items" = convertResultsToQuery(result.value),
+			"facet_queries" = structKeyExists(result, "@search.facets") ? convertFacetsToQueries(result["@search.facets"]) : {},
+			"total_items" = result['@odata.count']
+		};
 	}
 
 
@@ -816,7 +836,7 @@ component {
 
 		switch (arguments.field.type) {
 			case "Edm.String":
-				if (field.analyzer eq "keyword")
+				if (structKeyExists(field, "analyzer") and field.analyzer eq "keyword")
 					querySetCell(arguments.q, "type", "Literal", arguments.row);
 				else if
 					querySetCell(arguments.q, "type", "String", arguments.row);
@@ -848,6 +868,7 @@ component {
 		}
 		querySetCell(arguments.q, "return", arguments.field.retrievable, arguments.row);
 		querySetCell(arguments.q, "search", 1, arguments.row);
+		querySetCell(arguments.q, "filter", arguments.field.filterable, arguments.row);
 		querySetCell(arguments.q, "facet", arguments.field.facetable, arguments.row);
 		querySetCell(arguments.q, "sort", arguments.field.sortable, arguments.row);
 
@@ -899,7 +920,7 @@ component {
 		return application.fc.LIB.TIMEZONE.castFromUTC(rdate, application.fc.serverTimezone);
 	}
 
-	public string function getSearchQueryFromArray(required struct stIndexFields, required array conditions, boolean bBoost=true, string logicalJoin="and"){
+	public string function getSearchQueryFromArray(required struct stIndexFields, required array conditions, boolean bBoost=true, string logicalJoin=" and "){
 		var item = {};
 		var arrOut = [];
 
@@ -913,30 +934,25 @@ component {
 				structDelete(item,"stIndexFields");
 			}
 			else if (structKeyExists(item,"text")) {
-				arrayAppend(arrOut,getTextSearchQuery(stIndexFields=arguments.stIndexFields, text=item.text));
+				arrayAppend(arrOut,getTextSearchQuery(text=item.text));
 			}
 			else if (structKeyExists(item,"and")) {
-				if (arraylen(item["and"]) gt 1){
-					arrayAppend(arrOut, getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["and"]));
-				}
-				else {
-					arrayAppend(arrOut, getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["and"]));
-				}
+				arrayAppend(arrOut, getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["and"], logicalJoin=" and "));
 			}
 			else if (structKeyExists(item,"or")) {
-				if (arraylen(item["or"]) gt 1){
-					arrayAppend(arrOut, getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["or"], logicalJoin="or"));
-				}
-				else {
-					arrayAppend(arrOut, getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["or"], logicalJoin="or"));
-				}
+				arrayAppend(arrOut, getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["or"], logicalJoin=" or "));
 			}
 			else if (structKeyExists(item,"not")) {
-				arrayAppend(arrOut,"(not " & getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["not"]) & ")");
+				arrayAppend(arrOut,"not " & getSearchQueryFromArray(stIndexFields=arguments.stIndexFields, conditions=item["not"]));
 			}
 		}
 
-		return "(" & arrayToList(arrOut, " " & logicalJoin & " ") & ")";
+		if (arrayLen(arrOut) eq 1) {
+			return arrOut[1];
+		}
+		else {
+			return "(" & arrayToList(arrOut, logicalJoin) & ")";
+		}
 	}
 
 	private string function getTextValue(required string text){
@@ -949,22 +965,28 @@ component {
 		var clauses = [];
 		var op = "";
 
-		for (op in ["gt,gte,lt,lte"]) {
-			if (structKeyExists(arguments, op)) {
+		for (op in arguments) {
+			if (listFindNoCase("lt,gt,gte,lte", op)) {
 				value = arguments[op];
-
 				switch (arguments.stIndexField.type){
-					case "Int32": case "Int64": case "Double":
-						arrayAppend(clauses, "#field# #op# #value#");
-						break;
 					case "String": case "CollectionString": case "Literal": case "CollectionLiteral":
-						arrayAppend(clauses, "#field# #op# '#replace(value,"'","\'")#'");
+						value = "'#replace(value,"'","\'")#'";
 						break;
 					case "DateTimeOffset":
-						arrayAppend(clauses, "#field# #op# '#getRFC3339Date(value)#'");
+						value = getRFC3339Date(value);
 						break;
 				}
+
+				if (len(op) eq 2) {
+					arrayAppend(clauses, "#field# #op# #value#");
+				}
+				else if (len(op) eq 3) {
+					arrayAppend(clauses, "(#field# #mid(op, 1, 2)# #value# or #field# eq #value#)");
+				}
 			}
+		}
+		if (not structKeyExists(arguments, "gt") and not structKeyExists(arguments, "gte") and not structKeyExists(arguments, "lt") and not structKeyExists(arguments, "lte")) {
+			throw(message="Range must include at least one of: gt, gte, lt, lte", detail=serializeJSON(arguments));
 		}
 
 		if (arrayLen(clauses) eq 1) {
@@ -977,19 +999,29 @@ component {
 		return str;
 	}
 
-	private string function getTextSearchQuery(required struct stIndexFields, required string text){
+	private string function getTextSearchQuery(struct stIndexFields, required string text){
 		var aSubQuery = [];
 		var key = "";
 		var textStr = getTextValue(arguments.text);
 		var boost = "";
 
-		for (key in arguments.stIndexFields){
-			if (listfindnocase("String,CollectionString",arguments.stIndexFields[key].type)) {
-				arrayAppend(aSubQuery, "search.ismatchscoring('#textStr#', '#arguments.stIndexFields[key].field#')");
+		if (structKeyExists(arguments, "stIndexFields")) {
+			for (key in arguments.stIndexFields){
+				if (listfindnocase("String,CollectionString",arguments.stIndexFields[key].type)) {
+					arrayAppend(aSubQuery, "search.ismatchscoring('#textStr#', '#arguments.stIndexFields[key].field#')");
+				}
 			}
 		}
+		else {
+			arrayAppend(aSubQuery, "search.ismatchscoring('#textStr#')");
+		}
 
-		return "(" & arraytolist(aSubQuery, " or ") & ")";
+		if (arrayLen(aSubQuery) eq 1) {
+			return aSubQuery[1];
+		}
+		else {
+			return "(" & arrayToList(aSubQuery, " or ") & ")";
+		}
 	}
 
 	private string function getFieldQuery(required struct stIndexFields, required string property){
@@ -1003,29 +1035,36 @@ component {
 			value = getTextValue(arguments.text);
 			for (key in arguments.stIndexFields){
 				if (arguments.stIndexFields[key].property eq arguments.property and listfindnocase("String,CollectionString",arguments.stIndexFields[key].type)) {
-					arrayAppend(aSubQuery, "search.ismatchscoring('#value#', '#arguments.stIndexFields[key].field#')");
+					arrayAppend(aSubQuery, "search.ismatchscoring(#value#, '#arguments.stIndexFields[key].field#')");
 				}
 			}
 		}
 		else if (structKeyExists(arguments,"term")){
 			for (key in arguments.stIndexFields){
 				if (arguments.stIndexFields[key].property eq arguments.property) {
-					switch (arguments.stIndexFields[key].type){
-						case "Boolean":
-							value = arguments.term ? "true" : "false";
-							break;
-						case "Int32": case "Int64": case "Double":
-							value = arguments.term;
-							break;
-						case "String": case "CollectionString": case "Literal": case "CollectionLiteral":
-							value = "'#replace(arguments.term,"'","\'")#'";
-							break;
-						case "DateTimeOffset":
-							value = "'#getRFC3339Date(arguments.term)#'";
-							break;
-					}
+					value = "'#replace(arguments.term,"'","\'")#'";
 
-					arrayAppend(aSubQuery, "#arguments.stIndexFields[key].field# eq #value#");
+					if (listFindNoCase("CollectionString,CollectionLiteral", arguments.stIndexFields[key].type)) {
+						arrayAppend(aSubQuery, "#arguments.stIndexFields[key].field#/any(t: t eq #value#)");
+					}
+					else {
+						switch (arguments.stIndexFields[key].type){
+							case "Boolean":
+								value = arguments.term ? "true" : "false";
+								break;
+							case "Int32": case "Int64": case "Double":
+								value = arguments.term;
+								break;
+							case "String": case "Literal":
+								value = "'#replace(arguments.term,"'","\'")#'";
+								break;
+							case "DateTimeOffset":
+								value = "'#getRFC3339Date(arguments.term)#'";
+								break;sid/any(s: s eq 'ACL')
+						}
+
+						arrayAppend(aSubQuery, "#arguments.stIndexFields[key].field# eq #value#");
+					}
 				}
 			}
 		}
@@ -1042,7 +1081,17 @@ component {
 					arrayAppend(aSubQuery, "#arguments.stIndexFields[key].field# gt #getRFC3339Date(arguments.dateafter)#");
 				}
 			}
-
+		}
+		else if (structKeyExists(arguments,"in")){
+			for (key in arguments.stIndexFields){
+				if (arguments.stIndexFields[key].property eq arguments.property) {
+					arrayAppend(aSubQuery, "search.in(#arguments.stIndexFields[key].field#, '#arguments.in#', ',')");
+				}
+			}
+		}
+		else {
+			structDelete(arguments, "stIndexFields");
+			throw(message="Unknown property filter: #arguments.property#", detail=serializeJSON(arguments));
 		}
 
 		if (arrayLen(aSubQuery) gt 1){
@@ -1062,7 +1111,7 @@ component {
 		var stNew = {};
 		var stField = {};
 		var field = "";
-		var qResult = querynew("field,type,return,search,facet,sort,analyzer,action","varchar,varchar,bit,bit,bit,bit,varchar,varchar");
+		var qResult = querynew("field,type,return,search,filter,facet,sort,analyzer,action","varchar,varchar,bit,bit,bit,bit,bit,varchar,varchar");
 		var changes = "";
 		var i = "";
 
@@ -1090,6 +1139,7 @@ component {
 				querySetCell(qResult,"type",stOld[field].type);
 				querySetCell(qResult,"return",stOld[field].return);
 				querySetCell(qResult,"search",stOld[field].search);
+				querySetCell(qResult,"filter",stOld[field].filter);
 				querySetCell(qResult,"facet",stOld[field].facet);
 				querySetCell(qResult,"sort",stOld[field].sort);
 				querySetCell(qResult,"analyzer",stOld[field].analyzer);
@@ -1104,6 +1154,7 @@ component {
 				querySetCell(qResult,"type",stNew[field].type);
 				querySetCell(qResult,"return",stNew[field].return);
 				querySetCell(qResult,"search",stNew[field].search);
+				querySetCell(qResult,"filter",stNew[field].filter);
 				querySetCell(qResult,"facet",stNew[field].facet);
 				querySetCell(qResult,"sort",stNew[field].sort);
 				querySetCell(qResult,"analyzer",stNew[field].analyzer);
@@ -1112,7 +1163,7 @@ component {
 			else if (structKeyExists(stOld,field) and (arguments.fields == "" or listfindnocase(arguments.fields,field))) {
 				changes = "";
 
-				for (i in ["return","type","search","facet","sort","analyzer"]) {
+				for (i in ["return","type","search","filter","facet","sort","analyzer"]) {
 					if (i eq "type" and stOld[field][i] eq "String" and stNew[field][i] eq "Literal") {
 						// ignore
 					}
@@ -1131,6 +1182,7 @@ component {
 					querySetCell(qResult,"type",stNew[field].type);
 					querySetCell(qResult,"return",stNew[field].return);
 					querySetCell(qResult,"search",stNew[field].search);
+					querySetCell(qResult,"filter",stNew[field].filter);
 					querySetCell(qResult,"facet",stNew[field].facet);
 					querySetCell(qResult,"sort",stNew[field].sort);
 					querySetCell(qResult,"analyzer",stNew[field].analyzer);
@@ -1139,15 +1191,50 @@ component {
 			}
 		}
 
-		return qResult;
+		return queryExecute("SELECT * FROM qResult ORDER BY field ASC", [], { dbtype="query" });
 	}
 
 	public struct function getTypeIndexFields(string typename="all", boolean bUseCache=true){
+		if (not isEnabled()) {
+			return {};
+		}
+
+		var key = "";
+		var stIndexFields = {};
+
 		if (not structKeyExists(this.fieldCache,arguments.typename) or not arguments.bUseCache){
-			updateTypeIndexFieldCache(arguments.typename);
+			// collect index field information
+			if (listLen(arguments.typename) eq 1){
+				updateTypeIndexFieldCache(arguments.typename);
+			}
+			else {
+				for (key in listtoarray(arguments.typename)){
+					structAppend(stIndexFields, getTypeIndexFields(key));
+				}
+
+				return stIndexFields
+			}
 		}
 
 		return this.fieldCache[arguments.typename];
+	}
+
+	public string function getHighlightableFields(boolean bUseCache=true) {
+		if (not structKeyExists(this.fieldCache, "highlightable_fields") or not arguments.bUseCache){
+			var fields = getTypeIndexFields();
+			var item = "";
+			var lResult = "";
+
+			for (item in fields) {
+				if (fields[item].type eq "String" and fields[item].facet eq false) {
+					lResult = listAppend(lResult, item);
+				}
+			}
+
+			this.fieldCache["highlightable_fields"] = lResult;
+		}
+
+		return this.fieldCache["highlightable_fields"];
 	}
 
 	public void function updateTypeIndexFieldCache(string typename="all"){
