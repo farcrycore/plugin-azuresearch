@@ -16,7 +16,7 @@
 					"uploaded"=stResult.count,
 					"typename"=qTypes.contentType,
 					"typelabel"=application.fapi.getContentTypeMetadata(typename=qTypes.contentType, md="displayname", default=qTypes.contentType),
-					"more"=true
+					"more"=stResult.count eq 25
 				}) />
 			</cfif>
 		</cfloop>
