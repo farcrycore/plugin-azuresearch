@@ -18,7 +18,7 @@
 <cfif stResults["@odata.count"] eq 0>
 	<cfoutput><div class="alert alert-info">No results were found</div></cfoutput>
 <cfelse>
-	<cfif not structIsEmpty(stResults, "facet_queries")>
+	<cfif not structIsEmpty(stResults.facet_queries)>
 		<cfoutput><h4>Facets</h4></cfoutput>
 		<cfloop collection="#stResults.facet_queries#" item="property">
 			<cfset qFacets = stResults.facet_queries[property] />
