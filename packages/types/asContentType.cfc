@@ -450,7 +450,7 @@
 		<cfset var qContent = "" />
 
 		<cfquery datasource="#application.dsn#" name="qContent" maxrows="#arguments.maxrows#">
-			select 		objectid, datetimeLastUpdated, '#arguments.typename#' as typename, 'updated' as operation
+			select 		objectid, datetimeLastUpdated, datePart(ms, datetimeLastUpdated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'updated' as operation
 						<cfif len(arguments.extraProperties)>
 							, #arguments.extraProperties#
 						</cfif>
@@ -461,7 +461,7 @@
 
 			UNION
 
-			select 		archiveID as objectid, datetimeCreated as datetimeLastUpdated, '#arguments.typename#' as typename, 'deleted' as operation
+			select 		archiveID as objectid, datetimeCreated as datetimeLastUpdated, datePart(ms, datetimeCreated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'deleted' as operation
 						<cfif len(arguments.extraProperties)>
 							, '' as #replace(arguments.extraProperties, ",", ", '' as ", "ALL")#
 						</cfif>
@@ -600,8 +600,11 @@
 			<cfloop collection="#stUploadMetadata#" item="key">
 				<cfif len(qContent[key][qContent.currentrow])>
 					<cftry>
-						<cfset application.fc.lib.azurecdn.updateTags(typename=arguments.typename, stObject=oContent.getData(qContent.objectid), stMetadata=stUploadMetadata[key]) />
-						<cfset updatecount += 1 />
+						<cfset stMeta = application.fc.lib.cdn.cdns.azure.ioReadMetadata(config=stFiles.locationConfig, file=stFiles.files.file) />
+						<cfif not structKeyExists(stMeta, "AzureSearch_Skip")>
+							<cfset application.fc.lib.azurecdn.updateTags(typename=arguments.typename, stObject=oContent.getData(qContent.objectid), stMetadata=stUploadMetadata[key]) />
+							<cfset updatecount += 1 />
+						</cfif>
 
 						<cfcatch>
 							<cfif find("The specified blob does not exist", cfcatch.message)>
@@ -621,6 +624,7 @@
 			"typename" = arguments.typename,
 			"updatecount" = updatecount,
 			"missingcount" = missingcount,
+			"builtToDate" = builtToDate,
 			"nextMark" = qContent.recordcount ? application.fc.lib.cdn.cdns.azure.dateToRFC3339(builtToDate) : "",
 			"more" = qContent.recordcount eq arguments.maxrows,
 			"range" = "[" & application.fc.lib.cdn.cdns.azure.dateToRFC3339(arguments.runfrom) & " - " & (qContent.recordcount ? application.fc.lib.cdn.cdns.azure.dateToRFC3339(builtToDate) : "now") & "]"
