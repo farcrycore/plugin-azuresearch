@@ -600,11 +600,13 @@
 			<cfloop collection="#stUploadMetadata#" item="key">
 				<cfif len(qContent[key][qContent.currentrow])>
 					<cftry>
-						<cfset stMeta = application.fc.lib.cdn.cdns.azure.ioReadMetadata(config=stFiles.locationConfig, file=stFiles.files.file) />
-						<cfif not structKeyExists(stMeta, "AzureSearch_Skip")>
+						<cfset stObject = oContent.getData(qContent.objectid) />
+						<cfset fileMeta = application.fc.lib.azurecdn.resolveLocationMetadata(typename=arguments.typename, stObject=stObject, stMetadata=stUploadMetadata[key]) />
+						<cfset stMeta = application.fc.lib.cdn.cdns.azure.ioReadMetadata(config=fileMeta.cdnConfig, file=stObject[stUploadMetadata[key].name]) />
+						<cfif not structKeyExists(stMeta, "AzureSearch_Skip") or stMeta.AzureSearch_Skip eq "true">
 							<cfset application.fc.lib.azurecdn.updateTags(typename=arguments.typename, stObject=oContent.getData(qContent.objectid), stMetadata=stUploadMetadata[key]) />
-							<cfset updatecount += 1 />
 						</cfif>
+						<cfset updatecount += 1 />
 
 						<cfcatch>
 							<cfif find("The specified blob does not exist", cfcatch.message)>
