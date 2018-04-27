@@ -493,6 +493,8 @@
 		<cfset var stResult = {} />
 		<cfset var count = 0 />
 
+		<cfimport taglib="/farcry/core/tags/farcry" prefix="fc" />
+
 		<cfif not structKeyExists(arguments,"stObject")>
 			<cfset arguments.stObject = getData(objectid=arguments.objectid) />
 		</cfif>
@@ -506,13 +508,16 @@
 				<cfset stObject = oContent.getData(objectid=qContent.objectid) />
 				<cfset stContent = getAzureSearchDocument(stObject=stObject) />
 				<cfset stContent["@search.action"] = "mergeOrUpload" />
-
 				<cfset arrayAppend(aDocs, stContent) />
+
+				<fc:logevent object="#stObject.objectid#" type="#stObject.typename#" event="searchindexed" />
 			<cfelseif qContent.operation eq "deleted">
 				<cfset arrayAppend(aDocs, {
 					"@search.action" = "delete",
 					"objectid_literal" = qContent.objectid
 				}) />
+
+				<fc:logevent object="#stObject.objectid#" type="#stObject.typename#" event="searchdeleted" />
 			</cfif>
 
 			<cfset builtToDate = qContent.datetimeLastUpdated />
@@ -644,6 +649,8 @@
 		<cfset var builtToDate = "" />
 		<cfset var stResult = {} />
 
+		<cfimport taglib="/farcry/core/tags/farcry" prefix="fc" />
+
 		<cfif not structKeyExists(arguments,"stObject")>
 			<cfset arguments.stObject = application.fapi.getContentData(typename=arguments.typename,objectid=arguments.objectid) />
 		</cfif>
@@ -655,12 +662,14 @@
 			<cfset stContent["@search.action"] = "mergeOrUpload" />
 			<cfset arrayAppend(aDocs, stContent) />
 			<cfset builtToDate = arguments.stObject.datetimeLastUpdated />
+			<fc:logevent object="#arguments.stObject.objectid#" type="#arguments.stObject.typename#" event="searchindexed" />
 		<cfelseif arguments.operation eq "deleted">
 			<cfset arrayAppend(aDocs, {
 				"@search.action" = "delete",
 				"objectid" = arguments.stObject.objectid
 			}) />
 			<cfset builtToDate = now() />
+			<fc:logevent object="#arguments.stObject.objectid#" type="#arguments.stObject.typename#" event="searchdeleted" />
 		</cfif>
 
 		<cfset stResult = application.fc.lib.azuresearch.uploadDocuments(documents=aDocs) />
