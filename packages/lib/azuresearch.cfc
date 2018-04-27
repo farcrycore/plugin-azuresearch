@@ -674,7 +674,10 @@ component {
 
 		return makeRequest(
 			serviceName=arguments.serviceName,
-			resource="/indexes/#arguments.index#/docs/#arguments.key#"
+			resource="/indexes/#arguments.index#/docs/#arguments.key#",
+			stQuery={
+				"$select"="*"
+			}
 		);
 	}
 

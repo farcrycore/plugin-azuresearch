@@ -609,7 +609,7 @@
 						<cfset updatecount += 1 />
 
 						<cfcatch>
-							<cfif find("The specified blob does not exist", cfcatch.message)>
+							<cfif find("The specified blob does not exist", cfcatch.message) or find("The requested URI does not represent any resource on the server.", cfcatch.message)>
 								<cfset missingcount += 1 />
 							<cfelse>
 								<cfrethrow />
