@@ -666,7 +666,7 @@
 		<cfelseif arguments.operation eq "deleted">
 			<cfset arrayAppend(aDocs, {
 				"@search.action" = "delete",
-				"objectid" = arguments.stObject.objectid
+				"objectid_literal" = arguments.stObject.objectid
 			}) />
 			<cfset builtToDate = now() />
 			<fc:logevent object="#arguments.stObject.objectid#" type="#arguments.stObject.typename#" event="searchdeleted" />
