@@ -959,7 +959,7 @@ component {
 	}
 
 	private string function getTextValue(required string text){
-		return "'" & replacelist(trim(rereplace(arguments.text,"\s+"," ","ALL")),"', ","\',' '") & "'";
+		return "'" & replacelist(trim(rereplace(arguments.text,"\s+"," ","ALL")),"'","\'") & "'";
 	}
 
 	private string function getRangeValue(required struct stIndexField){
@@ -1011,7 +1011,7 @@ component {
 		if (structKeyExists(arguments, "stIndexFields")) {
 			for (key in arguments.stIndexFields){
 				if (listfindnocase("String,CollectionString",arguments.stIndexFields[key].type)) {
-					arrayAppend(aSubQuery, "search.ismatchscoring('#textStr#', '#arguments.stIndexFields[key].field#')");
+					arrayAppend(aSubQuery, "search.ismatchscoring(#textStr#, '#arguments.stIndexFields[key].field#')");
 				}
 			}
 		}
