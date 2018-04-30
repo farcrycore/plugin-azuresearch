@@ -444,33 +444,46 @@
 	<cffunction name="getRecordsToUpdate" access="public" output="false" returntype="query">
 		<cfargument name="typename" type="string" required="true" />
 		<cfargument name="builtToDate" type="string" required="false" />
+		<cfargument name="builtToID" type="uuid" required="false" />
 		<cfargument name="maxRows" type="numeric" required="false" default="-1" />
 		<cfargument name="extraProperties" type="string" required="false" default="" />
 
 		<cfset var qContent = "" />
 
 		<cfquery datasource="#application.dsn#" name="qContent" maxrows="#arguments.maxrows#">
-			select 		objectid, datetimeLastUpdated, datePart(ms, datetimeLastUpdated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'updated' as operation
+			select 		t.objectid, t.datetimeLastUpdated, datePart(ms, t.datetimeLastUpdated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'updated' as operation
 						<cfif len(arguments.extraProperties)>
 							, #arguments.extraProperties#
 						</cfif>
-			from 		#application.dbowner##arguments.typename#
-						<cfif application.fapi.showFarcryDate(arguments.builtToDate)>
-							where 	datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
-						</cfif>
+			<cfif structKeyExists(arguments, "builtToDate") and application.fapi.showFarcryDate(arguments.builtToDate)>
+				from	#application.dbowner##arguments.typename# t
+				where 	t.datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
+			<cfelseif structKeyExists(arguments, "builtToID")>
+				from	#application.dbowner##arguments.typename# t
+						inner join #application.dbowner#asContentType c on c.contentType=<cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#">
+				where	t.datetimeLastUpdated > c.builtToDate
+			</cfif>
 
 			UNION
 
-			select 		archiveID as objectid, datetimeCreated as datetimeLastUpdated, datePart(ms, datetimeCreated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'deleted' as operation
+			select 		t.archiveID as objectid, t.datetimeCreated as datetimeLastUpdated, datePart(ms, t.datetimeCreated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'deleted' as operation
 						<cfif len(arguments.extraProperties)>
 							, '' as #replace(arguments.extraProperties, ",", ", '' as ", "ALL")#
 						</cfif>
-			from 		#application.dbowner#dmArchive
-			where 		objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
+			<cfif structKeyExists(arguments, "builtToDate") and application.fapi.showFarcryDate(arguments.builtToDate)>
+				from	#application.dbowner#dmArchive
+				where	objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
 						and bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
 						<cfif application.fapi.showFarcryDate(arguments.builtToDate)>
 							and datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
 						</cfif>
+			<cfelseif structKeyExists(arguments, "builtToID")>
+				from	#application.dbowner#dmArchive t
+						inner join #application.dbowner#asContentType c on c.contentType=<cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#">
+				where	t.objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
+						and t.bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
+						and t.datetimeLastUpdated > c.builtToDate
+			</cfif>
 
 			order by 	datetimeLastUpdated asc
 		</cfquery>
@@ -500,7 +513,7 @@
 		</cfif>
 
 		<cfset oContent = application.fapi.getContentType(typename=arguments.stObject.contentType) />
-		<cfset qContent = getRecordsToUpdate(typename=arguments.stObject.contentType,builtToDate=arguments.stObject.builtToDate,maxRows=arguments.maxRows) />
+		<cfset qContent = getRecordsToUpdate(typename=arguments.stObject.contentType, builtToID=arguments.stObject.objectid, maxRows=arguments.maxRows) />
 		<cfset builtToDate = arguments.stObject.builtToDate />
 
 		<cfloop query="qContent">
