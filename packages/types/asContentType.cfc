@@ -499,7 +499,7 @@
 
 		<cfset var qContent = "" />
 		<cfset var oContent = "" />
-		<cfset var stObject = "" />
+		<cfset var stItem = "" />
 		<cfset var stContent = {} />
 		<cfset var aDocs = [] />
 		<cfset var builtToDate = "" />
@@ -518,19 +518,19 @@
 
 		<cfloop query="qContent">
 			<cfif qContent.operation eq "updated" and (not structKeyExists(oContent, "isIndexable") or oContent.isIndexable(stObject=stObject))>
-				<cfset stObject = oContent.getData(objectid=qContent.objectid) />
-				<cfset stContent = getAzureSearchDocument(stObject=stObject) />
+				<cfset stItem = oContent.getData(objectid=qContent.objectid) />
+				<cfset stContent = getAzureSearchDocument(stObject=stItem) />
 				<cfset stContent["@search.action"] = "mergeOrUpload" />
 				<cfset arrayAppend(aDocs, stContent) />
 
-				<fc:logevent object="#stObject.objectid#" type="#stObject.typename#" event="searchindexed" />
+				<fc:logevent object="#qContent.objectid#" type="#qContent.typename#" event="searchindexed" />
 			<cfelseif qContent.operation eq "deleted">
 				<cfset arrayAppend(aDocs, {
 					"@search.action" = "delete",
 					"objectid_literal" = qContent.objectid
 				}) />
 
-				<fc:logevent object="#stObject.objectid#" type="#stObject.typename#" event="searchdeleted" />
+				<fc:logevent object="#qContent.objectid#" type="#qContent.typename#" event="searchdeleted" />
 			</cfif>
 
 			<cfset builtToDate = qContent.datetimeLastUpdated />
