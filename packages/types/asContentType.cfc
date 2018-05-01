@@ -471,11 +471,11 @@
 							, '' as #replace(arguments.extraProperties, ",", ", '' as ", "ALL")#
 						</cfif>
 			<cfif structKeyExists(arguments, "builtToDate") and application.fapi.showFarcryDate(arguments.builtToDate)>
-				from	#application.dbowner#dmArchive
-				where	objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
-						and bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
+				from	#application.dbowner#dmArchive t
+				where	t.objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
+						and t.bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
 						<cfif application.fapi.showFarcryDate(arguments.builtToDate)>
-							and datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
+							and t.datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
 						</cfif>
 			<cfelseif structKeyExists(arguments, "builtToID")>
 				from	#application.dbowner#dmArchive t
