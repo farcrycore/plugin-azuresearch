@@ -795,7 +795,9 @@ component {
 		for (item in arguments.input) {
 			queryAddRow(qResult);
 			querySetCell(qResult, "objectid", item.objectid_literal);
-			querySetCell(qResult, "typename", item.typename_literal);
+			if (structKeyExists(item, "typename_literal")) {
+				querySetCell(qResult, "typename", item.typename_literal);
+			}
 			querySetCell(qResult, "score", item["@search.score"]);
 		}
 
