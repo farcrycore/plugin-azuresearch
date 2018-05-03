@@ -1,5 +1,5 @@
 <!--- 
-http://yaffa-env-adnews.192.168.99.101.nip.io/webtop/index.cfm?typename=csContentType&view=webtopPageModal&bodyView=webtopBodyUploadAuto
+http://yaffa-env-adnews.192.168.99.101.nip.io/webtop/index.cfm?typename=asContentType&view=webtopPageModal&bodyView=webtopBodyUploadAuto
  --->
 <cfsetting enablecfoutputonly="true" requesttimeout="10000">
 
@@ -8,14 +8,14 @@ http://yaffa-env-adnews.192.168.99.101.nip.io/webtop/index.cfm?typename=csConten
 	<cfparam name="URL.skip"    default="">
 	<cfparam name="URL.maxRows" default="50">
 		
-	<cfset qTypes = application.fapi.getContentObjects(typename="csContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
+	<cfset qTypes = application.fapi.getContentObjects(typename="asContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
 	<!--- <cfdump var="#qTypes#" label="qTypes #qTypes.recordcount#" expand="false" format="simple"> --->
 	
 	<cftry>
 		<cfset more = false>
 	
 		<cfloop query="qTypes">
-			<cfset stContentType = application.fapi.getContentObject(qTypes.objectid,"csContentType") />
+			<cfset stContentType = application.fapi.getContentObject(qTypes.objectid,"asContentType") />
 			
 			<cfif ListLen(URL.skip) == 0 OR ListFind(URL.skip, stContentType.CONTENTTYPE) == 0>
 				<cfset stResult = bulkImportIntoCloudSearch(objectid=qTypes.objectid, maxRows=URL.maxRows) />
@@ -44,7 +44,7 @@ http://yaffa-env-adnews.192.168.99.101.nip.io/webtop/index.cfm?typename=csConten
 				
 			     <script type="text/javascript">
 		         <!--
-		           window.location="/webtop/index.cfm?typename=csContentType&view=webtopPageModal&bodyView=webtopBodyUploadAuto&skip=#URL.skip#&maxRows=#URL.maxRows#"; 
+		           window.location="/webtop/index.cfm?typename=asContentType&view=webtopPageModal&bodyView=webtopBodyUploadAuto&skip=#URL.skip#&maxRows=#URL.maxRows#"; 
 		         //-->
 		      </script>
 			</cfoutput>

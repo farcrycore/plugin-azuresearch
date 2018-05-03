@@ -7,12 +7,12 @@
 	
 	<cfset count = 0 />
 
-	<cfset csContentType = application.fapi.getContentType(typename="csContentType") />
-	<cfset qTypes = application.fapi.getContentObjects(typename="csContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
+	<cfset asContentType = application.fapi.getContentType(typename="asContentType") />
+	<cfset qTypes = application.fapi.getContentObjects(typename="asContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
 
 	<cftry>
 		<cfloop query="qTypes">
-			<cfset stResult = csContentType.bulkImportIntoCloudSearch(objectid=qTypes.objectid, maxRows=url.atatime) />
+			<cfset stResult = asContentType.bulkImportIntoCloudSearch(objectid=qTypes.objectid, maxRows=url.atatime) />
 
 			<cfif stResult.count>
 				<cfset count = stResult.count />

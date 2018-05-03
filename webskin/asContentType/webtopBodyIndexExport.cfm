@@ -1,5 +1,5 @@
 <!--- 
-/webtop/index.cfm?typename=csContentType&view=webtopPageModal&bodyView=webtopBodyIndexExport
+/webtop/index.cfm?typename=asContentType&view=webtopPageModal&bodyView=webtopBodyIndexExport
  --->
 <cfsetting enablecfoutputonly="true" requesttimeout="10000">
 	
@@ -12,7 +12,7 @@
 	<cftry>
 
 		<cfset aContentTypes = []>
-		<cfset qTypes = application.fapi.getContentObjects(typename="csContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
+		<cfset qTypes = application.fapi.getContentObjects(typename="asContentType",lProperties="objectid,contentType,builtToDate",orderby="builtToDate asc") />
 
 		<cfoutput>
 			<h1>CloudSearch - Content Type Index Export</h1>
@@ -27,7 +27,7 @@
 		<cfif FORM.formAction == 'Export'>
 			
 			<cfloop query="qTypes">
-				<cfset stContentType = application.fapi.getContentObject(qTypes.objectid,"csContentType") />
+				<cfset stContentType = application.fapi.getContentObject(qTypes.objectid,"asContentType") />
 				
 				<cfif listFindNoCase(FORM.CONTENTTYPEs, stContentType.CONTENTTYPE) != 0>
 

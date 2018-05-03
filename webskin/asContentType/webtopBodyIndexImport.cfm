@@ -1,5 +1,5 @@
 <!--- 
-/webtop/index.cfm?typename=csContentType&view=webtopPageModal&bodyView=webtopBodyIndexImport
+/webtop/index.cfm?typename=asContentType&view=webtopPageModal&bodyView=webtopBodyIndexImport
  --->
 <cfsetting enablecfoutputonly="true" requesttimeout="10000">
 
@@ -20,10 +20,10 @@
 					<cfloop array="#aContentTypes#" item="stContentType">
 						
 						<!--- look for record --->
-						<cfset qTypes = application.fapi.getContentObjects(typename="csContentType",label_eq="#stContentType.label#") />
+						<cfset qTypes = application.fapi.getContentObjects(typename="asContentType",label_eq="#stContentType.label#") />
 						<cfif qTypes.RecordCount EQ 1>
 							
-							<cfset stContentTypeOrig = application.fapi.getContentObject(qTypes.objectid,"csContentType") />	
+							<cfset stContentTypeOrig = application.fapi.getContentObject(qTypes.objectid,"asContentType") />	
 							<cfset stContentTypeOrig.aProperties = stContentType.aProperties>
 							<cfloop array="#stContentTypeOrig.aProperties#" index="i" item="stIndex">
 								<cfset stContentTypeOrig.aProperties[i].PARENTID = stContentTypeOrig.objectid>

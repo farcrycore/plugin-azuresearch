@@ -1,5 +1,5 @@
 <cfsetting enablecfoutputonly="true" />
-<!--- @@displayname: CloudSearch --->
+<!--- @@displayname: Azure Search --->
 
 <cfimport taglib="/farcry/core/tags/formtools" prefix="ft" />
 <cfimport taglib="/farcry/core/tags/webskin" prefix="skin" />
@@ -35,23 +35,21 @@
 	</style>
 </cfoutput></skin:htmlHead>
 
-<cfset stDoc = application.fapi.getContentType("csContentType").getCloudsearchDocument(stObject=stObj) />
+<cfset stDoc = application.fapi.getContentType("asContentType").getAzureSearchDocument(stObject=stObj) />
 <cfset jsonOut = application.fapi.formatJSON(serializeJSON(stDoc)) />
 <ft:field label="Document"><cfoutput>
 	<pre class="formatjson">#jsonOut#</pre>
-	<p><a href='#application.fapi.getLink(type="csContentType", view="ajaxPush", urlParameters="pushtype=#stObj.typename#&pushID=#stObj.objectid#")#' onclick="$j(this).find('.info').remove().end().prepend('<i class=\'fa fa-spinner fa-spin info\'></i> '); $j.ajax({ url:this.href, dataType:'json', success:function(data){ $j(this).find('.fa').remove().end().append(' <span class=\'info\' style=\'text-decoration:none;cursor:default;'+(data.success ? 'color:green;' : 'color:red;')+'\'>'+data.message+'</span>'); }, context:this }); return false;">Push update to CloudSearch</a></p>
+	<p><a href='#application.fapi.getLink(type="asContentType", view="ajaxPush", urlParameters="pushtype=#stObj.typename#&pushID=#stObj.objectid#")#' onclick="$j(this).find('.info').remove().end().prepend('<i class=\'fa fa-spinner fa-spin info\'></i> '); $j.ajax({ url:this.href, dataType:'json', success:function(data){ $j(this).find('.fa').remove().end().append(' <span class=\'info\' style=\'text-decoration:none;cursor:default;'+(data.success ? 'color:green;' : 'color:red;')+'\'>'+data.message+'</span>'); }, context:this }); return false;">Push update to CloudSearch</a></p>
 </cfoutput></ft:field>
 
-<cfset stResult = application.fc.lib.cloudsearch.search(typename=stObj.typename,conditions=[{ "property"="objectid", "term"=stObj.objectid }]) />
+<cfset stResult = application.fc.lib.azuresearch.search(rawQuery="",filters=[{ "property"="objectid", "term"=stObj.objectid }]) />
 <cfoutput><h2>Object ID Search</h2></cfoutput>
-<ft:field label="Query"><cfoutput><pre>#stResult.rawQuery#</pre></cfoutput></ft:field>
-<ft:field label="Filter"><cfoutput><pre>#stResult.rawFilter#</pre></cfoutput></ft:field>
-<ft:field label="Records found"><cfoutput>#stResult.items.recordcount#</cfoutput></ft:field>
+<cfdump var="#stResult#">
 
-<cfset stResult = application.fc.lib.cloudsearch.search(rawQuery=stObj.label) />
+<cfset stResult = application.fc.lib.azuresearch.search(rawQuery=stObj.label) />
 <cfoutput><h2>Label Search</h2></cfoutput>
-<ft:field label="Query"><cfoutput><pre>#stResult.rawQuery#</pre></cfoutput></ft:field>
-<ft:field label="Filter"><cfoutput><pre>#stResult.rawFilter#</pre></cfoutput></ft:field>
+<cfdump var="#stResult#">
+
 <ft:field label="Results"><cfoutput>
 	<table class="table table-striped">
 		<thead>

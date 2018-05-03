@@ -776,7 +776,10 @@ component {
 		);
 
 		return {
-			"raw_query" = stQuery,
+			"method"="POST",
+			"serviceName"=arguments.serviceName,
+			"resource"="/indexes/#arguments.index#/docs/search",
+			"body" = stQuery,
 			"raw_result" = result,
 			"items" = convertResultsToQuery(result.value),
 			"facet_queries" = structKeyExists(result, "@search.facets") ? convertFacetsToQueries(result["@search.facets"]) : {},
