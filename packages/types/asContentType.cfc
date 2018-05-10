@@ -11,6 +11,9 @@
 		ftType="datetime"
 		ftHint="For system use.  Updated by the system.  Used as a reference date of the last indexed item.  Used for batching when indexing items.  Default is blank (no date).">
 
+	<cfproperty name="bDisabled" type="boolean" required="true" default="false"
+		ftSeq="10" ftFieldset="Azure Search Content Type" ftLabel="Disabled">
+
 	<cfproperty name="aProperties" type="array"
 		ftSeq="11" ftFieldset="Azure Search Content Type" ftLabel="Properties"
 		ftWatch="contentType"
@@ -314,6 +317,7 @@
 							asContentType_aProperties p
 							on ct.objectid=p.parentid
 					where 	p.bIndex=1
+							and ct.bDisabled=0
 							<cfif structKeyExists(arguments,"typename")>
 								and ct.contentType = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#">
 							</cfif>
@@ -329,6 +333,7 @@
 							asContentType_aProperties p
 							on ct.objectid=p.parentid
 					where 	p.bIndex=1
+							and ct.bDisabled=0
 							<cfif structKeyExists(arguments,"typename")>
 								and ct.contentType = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#">
 							</cfif>
@@ -447,6 +452,7 @@
 		<cfargument name="builtToID" type="uuid" required="false" />
 		<cfargument name="maxRows" type="numeric" required="false" default="-1" />
 		<cfargument name="extraProperties" type="string" required="false" default="" />
+		<cfargument name="bIncludeArchive" type="boolean" required="false" default="true" />
 
 		<cfset var qContent = "" />
 
@@ -464,25 +470,27 @@
 				where	t.datetimeLastUpdated > c.builtToDate
 			</cfif>
 
-			UNION
+			<cfif arguments.bIncludeArchive>
+				UNION
 
-			select 		t.archiveID as objectid, t.datetimeCreated as datetimeLastUpdated, datePart(ms, t.datetimeCreated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'deleted' as operation
-						<cfif len(arguments.extraProperties)>
-							, '' as #replace(arguments.extraProperties, ",", ", '' as ", "ALL")#
-						</cfif>
-			<cfif structKeyExists(arguments, "builtToDate") and application.fapi.showFarcryDate(arguments.builtToDate)>
-				from	#application.dbowner#dmArchive t
-				where	t.objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
-						and t.bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
-						<cfif application.fapi.showFarcryDate(arguments.builtToDate)>
-							and t.datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
-						</cfif>
-			<cfelseif structKeyExists(arguments, "builtToID")>
-				from	#application.dbowner#dmArchive t
-						inner join #application.dbowner#asContentType c on c.contentType=<cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#">
-				where	t.objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
-						and t.bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
-						and t.datetimeLastUpdated > c.builtToDate
+				select 		t.archiveID as objectid, t.datetimeCreated as datetimeLastUpdated, datePart(ms, t.datetimeCreated) as datetimeLastUpdated_ms, '#arguments.typename#' as typename, 'deleted' as operation
+							<cfif len(arguments.extraProperties)>
+								, '' as #replace(arguments.extraProperties, ",", ", '' as ", "ALL")#
+							</cfif>
+				<cfif structKeyExists(arguments, "builtToDate") and application.fapi.showFarcryDate(arguments.builtToDate)>
+					from	#application.dbowner#dmArchive t
+					where	t.objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
+							and t.bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
+							<cfif application.fapi.showFarcryDate(arguments.builtToDate)>
+								and t.datetimeLastUpdated > <cfqueryparam cfsqltype="cf_sql_timestamp" value="#arguments.builtToDate#">
+							</cfif>
+				<cfelseif structKeyExists(arguments, "builtToID")>
+					from	#application.dbowner#dmArchive t
+							inner join #application.dbowner#asContentType c on c.contentType=<cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#">
+					where	t.objectTypename = <cfqueryparam cfsqltype="cf_sql_varchar" value="#arguments.typename#" />
+							and t.bDeleted = <cfqueryparam cfsqltype="cf_sql_bit" value="1" />
+							and t.datetimeLastUpdated > c.builtToDate
+				</cfif>
 			</cfif>
 
 			order by 	datetimeLastUpdated asc
@@ -548,6 +556,63 @@
 		<cfset stResult["builtToDate"] = builtToDate />
 
 		<cfreturn stResult />
+	</cffunction>
+
+	<cffunction name="bulkRemoveFromAzureSearch" access="public" output="false" returntype="struct">
+		<cfargument name="objectid" type="uuid" required="false" hint="The objectid of the asContentType record to import" />
+		<cfargument name="stObject" type="struct" required="false" hint="The asContentType object to import" />
+		<cfargument name="maxRows" type="numeric" required="false" default="-1" />
+		<cfargument name="requestSize" type="numeric" required="false" default="5000000" />
+
+		<cfset var qContent = "" />
+		<cfset var oContent = "" />
+		<cfset var stItem = "" />
+		<cfset var stContent = {} />
+		<cfset var aDocs = [] />
+		<cfset var builtToDate = "" />
+		<cfset var stResult = {} />
+		<cfset var stReturn = {} />
+		<cfset var count = 0 />
+
+		<cfimport taglib="/farcry/core/tags/farcry" prefix="fc" />
+
+		<cfif not structKeyExists(arguments,"stObject")>
+			<cfset arguments.stObject = getData(objectid=arguments.objectid) />
+		</cfif>
+
+		<cfif not arguments.stObject.bDisabled>
+			<cfset arguments.stObject.bDisabled = true />
+			<cfset arguments.stObject.builtToDate = createDateTime(1970, 1, 1, 0, 0, 0) />
+			<cfset setData(stProperties=arguments.stObject) />
+		</cfif>
+
+		<cfset oContent = application.fapi.getContentType(typename=arguments.stObject.contentType) />
+		<cfset qContent = getRecordsToUpdate(typename=arguments.stObject.contentType, builtToID=arguments.stObject.objectid, maxRows=arguments.maxRows, bIncludeArchive=false) />
+		<cfset stReturn["builtToDate_from"] = arguments.stObject.builtToDate />
+		<cfset stReturn["builtToDate"] = arguments.stObject.builtToDate />
+
+		<cfloop query="qContent">
+			<cfset arrayAppend(aDocs, {
+				"@search.action" = "delete",
+				"objectid_literal" = qContent.objectid
+			}) />
+
+			<fc:logevent object="#qContent.objectid#" type="#qContent.typename#" event="searchdeleted" />
+
+			<cfset stReturn["builtToDate"] = qContent.datetimeLastUpdated />
+		</cfloop>
+
+		<cfif arrayLen(aDocs)>
+			<cfset stResult = application.fc.lib.azuresearch.uploadDocuments(documents=aDocs) />
+			<cfset arguments.stObject.builtToDate = stReturn["builtToDate"] />
+			<cfset setData(stProperties=arguments.stObject) />
+			<cflog file="azuresearch" text="Updated #arrayLen(aDocs)# #arguments.stObject.contentType# record/s" />
+		</cfif>
+
+		<cfset stReturn["typename"] = arguments.stObject.contentType />
+		<cfset stReturn["count"] = arrayLen(aDocs) />
+
+		<cfreturn stReturn />
 	</cffunction>
 
 	<cffunction name="bulkFixMetadata" access="public" output="false" returntype="struct">

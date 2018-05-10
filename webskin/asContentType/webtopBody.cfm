@@ -86,6 +86,12 @@
 	</skin:onReady>		
 </ft:processForm>
 
+<ft:processform action="De-index">
+	<skin:onReady><cfoutput>
+		$fc.objectAdminAction('Remove Documents', '/webtop/index.cfm?typename=asContentType&objectid=#form.selectedobjectid#&view=webtopPageModal&bodyView=webtopBodyRemoveAll');
+	</cfoutput></skin:onReady>
+</ft:processform>
+
 
 <cfset aCustomColumns = [
 	"contentType",
@@ -96,12 +102,12 @@
 <ft:objectAdmin	plugin="azuresearch"
 	title="Content Type Indexes"
 	typename="asContentType"
-	ColumnList="contentType,builtToDate"
+	ColumnList="contentType,builtToDate,bDisabled"
 	aCustomColumns="#aCustomColumns#"
 	SortableColumns=""
 	lFilterFields=""
 	sqlorderby="contentType asc"
-	lCustomActions="Index 1 Record,Index Next 10 Records,Index All Records"
+	lCustomActions="Index 1 Record,Index Next 10 Records,Index All Records,De-index"
 	r_oTypeAdmin="oTypeAdmin">
 
 	<cfset stAttributes = oTypeAdmin.getAttributes()>
