@@ -15,7 +15,7 @@
 
 <cfset stResults = application.fc.lib.azuresearch.search(rawQuery=url.q, facets=stFacets, maxrows=url.m, page=url.page) />
 
-<cfif stResults["@odata.count"] eq 0>
+<cfif stResults["total_items"] eq 0>
 	<cfoutput><div class="alert alert-info">No results were found</div></cfoutput>
 <cfelse>
 	<cfif not structIsEmpty(stResults.facet_queries)>
